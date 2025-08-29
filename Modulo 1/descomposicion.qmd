@@ -1,0 +1,47 @@
+---
+title: "Descomposición"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(fpp3)
+```
+
+Vamos a importar los datos de las medicinas:
+
+ALT + "-"
+
+```{r}
+medicinas <- read_csv("../datos/medicinas.csv")
+medicinas
+```
+
+Tenemos que convertirla a una `tsibble`. Para ello, tenemos que primero cambiar el formato de la fecha a un objeto `yearmonth`:
+
+```{r}
+medicinas <- medicinas |>
+  mutate(fecha = yearmonth(fecha)) |>
+  as_tsibble(index = fecha)
+
+medicinas
+```
+
+Graficamos la serie
+
+```{r}
+medicinas |> 
+  autoplot(Cost)
+```
+
+Como habíamos visto, la serie tiene una tendencia a la alza y un fuerte patrón estacional. Hacemos la descomposición clásica, tal como la hicimos en Excel:
+
+```{r}
+#| warning: false
+
+medicinas |>
+  model(classical_decomposition(Cost)) |>
+  components() |>
+  autoplot()
+```
+
