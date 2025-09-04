@@ -10,7 +10,6 @@ library(fpp3)
 
 Vamos a importar los datos de las medicinas:
 
-
 ```{r}
 # ALT + "-" para agregar " <- "
 medicinas <- read_csv("datos/medicinas.csv")
@@ -40,7 +39,8 @@ Como habíamos visto, la serie tiene una tendencia a la alza y un fuerte patrón
 #| warning: false
 
 medicinas_dcmp <- medicinas |>
-  model(dcmp_clasica_mult = classical_decomposition(Cost, type = "multiplicative")) |>
+  model(dcmp_clasica_mult = classical_decomposition(Cost, type = "multiplicative"),
+        dcmp_clasica_add = classical_decomposition(Cost, type = "additive")) |>
   components()
 
 medicinas_dcmp
@@ -55,6 +55,7 @@ medicinas_dcmp |>
 ```
 
 ## Descomposición STL
+
 ```{r}
 medicinas |> 
   autoplot(Cost)
@@ -72,7 +73,7 @@ medicinas |>
 
 ```{r}
 medicinas_stl <- medicinas |>
-  model(stl = STL(log(Cost) ~ trend(window = NULL) + season(window = "periodic"), robust = TRUE)) |>
+  model(stl = STL(log(Cost) ~ trend(window = 29) + season(window = "periodic"), robust = TRUE)) |>
   components()
 
 medicinas_stl |> 
@@ -84,7 +85,7 @@ Vamos a modificar manualmente un valor para convertirlo en outlier y ver cómo a
 ```{r}
 medicinas_mod <- medicinas
 
-medicinas_mod$Cost[50] <- 3
+medicinas_mod$Cost[47] <- 3
 
 medicinas_mod |> 
   autoplot(Cost)
@@ -94,4 +95,3 @@ medicinas_mod |>
   components() |> 
   autoplot()
 ```
-
