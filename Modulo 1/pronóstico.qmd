@@ -1,0 +1,46 @@
+---
+title: "pronóstico"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(fpp3)
+```
+
+```{r}
+gas_train <- aus_production |> 
+  filter_index(. ~ "2007 Q2")
+
+gas_train
+```
+
+```{r}
+gas_train |> 
+  autoplot(log(Gas))
+```
+Logaritmos no logra estabilizar la varianza. Vamos a probar con Box-Cox
+
+```{r}
+gas_lambda <- gas_train |> 
+  features(Gas, features = guerrero) |> 
+  pull()
+gas_lambda
+```
+```{r}
+gas_train |> 
+  autoplot(box_cox(Gas, gas_lambda))
+```
+
+¿Qué método de pronóstico se ajustaría mejor a esta serie?
+
+```{r}
+gas_fit <- gas_train |> 
+  model(
+    drift = RW(box_cox(Gas, gas_lambda) ~ drift()),
+    snaive = SNAIVE(box_cox(Gas, gas_lambda))
+  )
+
+gas_fit
+```
+
