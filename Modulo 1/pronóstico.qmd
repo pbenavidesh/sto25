@@ -38,9 +38,48 @@ gas_train |>
 gas_fit <- gas_train |> 
   model(
     drift = RW(box_cox(Gas, gas_lambda) ~ drift()),
-    snaive = SNAIVE(box_cox(Gas, gas_lambda))
+    snaive = SNAIVE(box_cox(Gas, gas_lambda)),
+    media = MEAN(box_cox(Gas, gas_lambda))
   )
 
 gas_fit
+```
+
+Vamos a hacer un **diagnóstico de los residuos** de los modelos. La función `augment()` nos permite obtener los residuos y otros valores ajustados de los modelos.
+
+```{r}
+gas_aug <- gas_fit |> 
+  augment()
+gas_aug
+```
+Gráfica de los residuos de los modelos:
+```{r}
+gas_aug |> 
+  autoplot(.innov) +
+  facet_wrap(~.model, ncol = 1, scales = "free_y")
+```
+Gráfica de la ACF del residuo de los modelos:
+```{r}
+gas_aug |> 
+  ACF(.innov) |>
+  autoplot() +
+  facet_wrap(~.model, ncol = 1, scale = "free_y")
+```
+Gráfica del histograma de los residuos de los modelos:
+```{r}
+#| warning: false
+
+gas_aug |> 
+  ggplot(aes(x = .innov, fill = .model)) +
+  geom_histogram() +
+  facet_wrap(~.model, ncol = 1, scales = "free_y")
+```
+Función para obtener el diagnóstico de residuos completo de un solo modelo:
+```{r}
+#| warning: false
+
+gas_fit |> 
+  select(drift) |> 
+  gg_tsresiduals()
 ```
 
