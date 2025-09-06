@@ -29,7 +29,7 @@ gas_lambda
 ```
 ```{r}
 gas_train |> 
-  autoplot(box_cox(Gas, gas_lambda))
+  autoplot(box_cox(Gas, lambda = gas_lambda))
 ```
 
 ¿Qué método de pronóstico se ajustaría mejor a esta serie?
@@ -54,6 +54,8 @@ gas_aug
 ```
 Gráfica de los residuos de los modelos:
 ```{r}
+#| warning: false
+
 gas_aug |> 
   autoplot(.innov) +
   facet_wrap(~.model, ncol = 1, scales = "free_y")
@@ -80,6 +82,34 @@ Función para obtener el diagnóstico de residuos completo de un solo modelo:
 
 gas_fit |> 
   select(drift) |> 
-  gg_tsresiduals()
+  gg_tsresiduals()+
+  ggtitle("Diagnóstico de residuos para el modelo del Drift")
+```
+Vamos a hacer pronóstico con estos tres modelos:
+
+```{r}
+gas_fc <- gas_fit |> 
+  forecast(h = "3 years")
+
+gas_fc
+```
+
+```{r}
+gas_fc |> 
+  autoplot(aus_production) +
+  facet_wrap(vars(.model), scale = "free_y", ncol = 1)
+```
+```{r}
+gas_fc |> 
+  accuracy(aus_production) |> 
+  arrange(RMSE)
+```
+
+Esto mismo lo podríamos calcular para los residuos (en el train):
+
+```{r}
+gas_fit |> 
+  accuracy() |> 
+  arrange(RMSE)
 ```
 
