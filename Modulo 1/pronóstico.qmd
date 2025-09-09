@@ -113,3 +113,73 @@ gas_fit |>
   arrange(RMSE)
 ```
 
+# Pronóstico con descomposición
+
+```{r}
+gas_train |> 
+  model(
+    stl = STL(box_cox(Gas, gas_lambda) ~ season(window = "periodic"), robust = TRUE)
+  ) |> 
+  components() |> 
+  autoplot()
+```
+
+
+
+```{r}
+gas_dcmp <- gas_train |> 
+  model(
+    dcmp = decomposition_model(                                                   #<1>
+      STL(box_cox(Gas, gas_lambda) ~ season(window = "periodic"), robust = TRUE), #<2>
+      RW(season_adjust ~ drift()),                                                #<3>
+      SNAIVE(season_year)                                                         #<4>
+    )
+  )
+
+gas_dcmp
+```
+
+1. `decomposition_model()` define que se realizará un pronóstico a partir de una descomposición.
+2. Primero se define cómo se realizará la descomposición. En este caso, con STL, con ajuste robusto y con componente estacional periódica.
+3. Luego se define el modelo para la serie desestacionalizada, `season_adjust`.
+4. Finalmente, se define el modelo para la serie estacional, `season_year`. Si este componente no se especifica, R va a utilizar `SNAIVE()` por default.
+
+```{r}
+#| warning: false
+gas_dcmp |> 
+  gg_tsresiduals()
+```
+```{r}
+gas_dcmp |> 
+  augment() |> 
+  features(.innov, ljung_box, lag = 8)
+
+gas_dcmp |> 
+  accuracy()
+```
+
+```{r}
+gas_dcmp_fc <- gas_dcmp |> 
+  forecast(h = "3 years")
+
+gas_dcmp_fc 
+
+gas_dcmp_fc |> 
+  autoplot(aus_production |> filter_index("1999 Q1" ~ .))
+```
+```{r}
+gas_fc_full <- gas_fc |> 
+  full_join(gas_dcmp_fc)
+
+gas_fc_full
+```
+
+```{r}
+gas_fc_full |> 
+  accuracy(aus_production) |> 
+  arrange(RMSE)
+
+gas_fc_full |> 
+  autoplot(aus_production |> filter_index("1999 Q1" ~ .), level = NULL)
+```
+
