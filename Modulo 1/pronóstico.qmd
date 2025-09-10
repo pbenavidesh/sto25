@@ -17,6 +17,8 @@ gas_train
 
 ```{r}
 gas_train |> 
+  autoplot(Gas)
+gas_train |> 
   autoplot(log(Gas))
 ```
 Logaritmos no logra estabilizar la varianza. Vamos a probar con Box-Cox
@@ -95,8 +97,14 @@ gas_fc
 ```
 
 ```{r}
+aus_prod_recent <- aus_production |> 
+  filter_index("2003 Q1" ~ .)
+```
+
+
+```{r}
 gas_fc |> 
-  autoplot(aus_production) +
+  autoplot(aus_prod_recent) +
   facet_wrap(vars(.model), scale = "free_y", ncol = 1)
 ```
 ```{r}
@@ -116,13 +124,28 @@ gas_fit |>
 # Pronóstico con descomposición
 
 ```{r}
-gas_train |> 
+gas_stl <- gas_train |> 
   model(
     stl = STL(box_cox(Gas, gas_lambda) ~ season(window = "periodic"), robust = TRUE)
   ) |> 
-  components() |> 
+  components()
+
+gas_stl
+
+gas_stl |> 
   autoplot()
+
+gas_stl |> 
+  ggplot(aes(x = Quarter, y = season_year)) +
+  geom_line() +
+  ggtitle("Componente estacional de la producción de gas")
+
+gas_stl |> 
+  ggplot(aes(x = Quarter, y = season_adjust)) +
+  geom_line() +
+  ggtitle("Serie desestacionalizada de la producción de gas")
 ```
+
 
 
 
@@ -181,5 +204,24 @@ gas_fc_full |>
 
 gas_fc_full |> 
   autoplot(aus_production |> filter_index("1999 Q1" ~ .), level = NULL)
+```
+```{r}
+gas_fit_full <- gas_fit |> 
+  cross_join(gas_dcmp) |> 
+  mutate(combinado = (snaive + dcmp)/2)
+
+gas_fit_full
+```
+
+```{r}
+gas_fcst_full <- gas_fit_full |> 
+  forecast(h = "3 years")
+
+gas_fcst_full |>
+  autoplot(aus_production |> filter_index("1999 Q1" ~ .), level = NULL)
+
+gas_fcst_full |>
+  filter(.model == "combinado") |>
+  autoplot(aus_production |> filter_index("1999 Q1" ~ .))
 ```
 
