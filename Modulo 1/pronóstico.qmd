@@ -188,7 +188,7 @@ gas_dcmp_fc <- gas_dcmp |>
 gas_dcmp_fc 
 
 gas_dcmp_fc |> 
-  autoplot(aus_production |> filter_index("1999 Q1" ~ .))
+  autoplot(aus_prod_recent)
 ```
 ```{r}
 gas_fc_full <- gas_fc |> 
@@ -203,7 +203,7 @@ gas_fc_full |>
   arrange(RMSE)
 
 gas_fc_full |> 
-  autoplot(aus_production |> filter_index("1999 Q1" ~ .), level = NULL)
+  autoplot(aus_prod_recent, level = NULL)
 ```
 ```{r}
 gas_fit_full <- gas_fit |> 
@@ -218,10 +218,34 @@ gas_fcst_full <- gas_fit_full |>
   forecast(h = "3 years")
 
 gas_fcst_full |>
-  autoplot(aus_production |> filter_index("1999 Q1" ~ .), level = NULL)
+  filter(.model %in% c("dcmp", "combinado", "snaive")) |> 
+  autoplot(aus_prod_recent, level = NULL)
 
 gas_fcst_full |>
-  filter(.model == "combinado") |>
-  autoplot(aus_production |> filter_index("1999 Q1" ~ .))
+  accuracy(aus_production) |> 
+  arrange(RMSE)
+```
+
+# ETS
+## SES
+
+```{r}
+ses <- gas_train |> 
+  model(
+    ses = ETS(Gas ~                 #<1>
+                error("A") +        #<2>
+                trend("N") +        #<3>
+                season("N"))        #<3>
+  )
+
+ses
+```
+
+1. `ETS()` es la función para estimar modelos de suavización exponencial y se deben definir 3 argumentos: error, tendencia y estacionalidad.
+2. Tenemos dos opciones: `"A"` para error aditivo, y `M` para multiplicativo.
+3. Para especificar que no queremos tendencia ni estacionalidad, ponemos `"N"` en ambos casos.
+
+```{r}
+report(ses)
 ```
 
