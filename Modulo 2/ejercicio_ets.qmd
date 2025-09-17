@@ -58,10 +58,43 @@ exports |>
 
 # Ejercicio
 
-1. Realizar un pronóstico a dos años para la serie.
+1. Realizar un pronóstico a dos años para la serie (de agosto 2023 a julio de 2025).
 2. Pueden utilizar cualquier método que hemos visto en clase.
 3. Se puede realizar en parejas.
 4. Entregar un informe en `Quarto` con el análisis y el pronóstico.
 5. La métrica de error a utilizar para calcular la precisión del pronóstico será el **MAE**.
 6. Fecha de entrega: 19 de septiembre.
 
+```{r}
+exports_train <- exports |> 
+  filter_index(. ~ "2021 Jul")
+exports_train
+```
+
+```{r}
+exports_fit <- exports_train |> 
+  model(
+    media = MEAN(price),
+    naive = NAIVE(price),
+  )
+
+exports_fc <- exports_fit |>
+  forecast(h = "2 years")
+
+exports_fc |> 
+  accuracy(exports) |> 
+  arrange(MAE)
+```
+
+El modelo naive es mejor en este caso. Utilizaré este modelo para el pronóstico final:
+
+```{r}
+exports_fit |> 
+  select(media) |>        #<1>
+  refit(exports) |>       #<2>
+  forecast(h = "2 years") #<3>
+```
+
+1. Seleccionamos el modelo que queremos utilizar para el pronóstico final.
+2. Reajustamos el modelo con todos los datos disponibles.
+3. Realizamos el pronóstico a dos años.
