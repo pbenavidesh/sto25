@@ -274,31 +274,6 @@ holt |>
   autoplot(aus_prod_recent)
 ```
 
-```{r}
-gas_dcmp_holt <- gas_train |> 
-  model(
-    stlf_ets = decomposition_model(
-      STL(box_cox(Gas, gas_lambda) ~ season(window = "periodic")),
-      ETS(season_adjust ~ error("A") + trend("Ad") + season("N")),
-      SNAIVE(season_year)
-    )
-  )
-
-gas_fit_full2 <- gas_fit_full |> 
-  cross_join(gas_dcmp_holt)
-
-gas_fcst_full2 <- gas_fit_full2 |> 
-  forecast(h = "3 years")
-
-p <- gas_fcst_full2 |> 
-  autoplot(aus_prod_recent, level = NULL)
-
-plotly::ggplotly(p)
-
-gas_fcst_full2 |> 
-  accuracy(aus_production) |> 
-  arrange(RMSE)
-```
 
 ### Tendencia amortiguada
 
@@ -306,7 +281,7 @@ gas_fcst_full2 |>
 ets_trend <- gas_train |> 
   model(
     holt = ETS(Gas ~ error("A") + trend("A") + season("N")),
-    tend_amort = ETS(Gas ~ error("A") + trend("Ad") + season("N"))
+    tend_amort = ETS(Gas ~ error("A") + trend("Ad", phi = 0.98) + season("N"))
   )
 
 ets_trend
@@ -320,6 +295,42 @@ ets_trend |>
   autoplot(aus_prod_recent, level = NULL)
 ```
 
+```{r}
+STLF <- decomposition_model(    
+      STL(box_cox(Gas, gas_lambda) ~ season(window = "periodic"), robust = TRUE),
+      RW(season_adjust ~ drift()),
+      SNAIVE(season_year)
+    )
+
+STLF_holt <- decomposition_model(
+      STL(box_cox(Gas, gas_lambda) ~ season(window = "periodic")),
+      ETS(season_adjust ~ error("A") + trend("Ad", phi = 0.8) + season("N")),
+      SNAIVE(season_year)
+    )
+
+
+gas_fit <- gas_train |> 
+  model(
+    snaive = SNAIVE(box_cox(Gas, gas_lambda)),
+    stlf = STLF,
+    stlf_holt = STLF_holt
+  )
+
+gas_fcst <- gas_fit |> 
+  forecast(h = "3 years")
+
+
+p <- gas_fcst |> 
+  autoplot(aus_prod_recent, level = NULL)
+
+plotly::ggplotly(p)
+
+gas_fcst |> 
+  accuracy(aus_production) |> 
+  arrange(MAPE)
+```
+
+
 ## Holt-winters
 
 ```{r}
@@ -328,48 +339,37 @@ gas_train |>
 
 hw <- gas_train |> 
   model(
-    hw = ETS(Gas ~ error("M") + trend("Ad", phi = 0.8) + season("M"))
+    hw = ETS(Gas ~ error("M") + trend("Ad", phi = 0.8) + season("M")),
+    hw_boxcox = ETS(box_cox(Gas, gas_lambda) ~ error("A") + trend("Ad", phi = 0.8) + season("A"))
   )
 
-report(hw)
-
 hw |> 
+  select(hw) |> 
+  report()
+
+p <- hw |> 
   forecast(h = "3 years") |> 
-  autoplot(aus_prod_recent)
+  autoplot(aus_prod_recent, level = NULL)
+
+plotly::ggplotly(p)
 ```
 
 # Comparando los mejores modelos hasta ahora
 
 ```{r}
-STLF <-  decomposition_model(
-  STL(box_cox(Gas, gas_lambda) ~ season(window = "periodic"), robust = TRUE),
-      RW(season_adjust ~ drift())
-)
-
-STLF_ets <- decomposition_model(
-  STL(box_cox(Gas, gas_lambda) ~ season(window = "periodic"), robust = TRUE),
-  ETS(season_adjust ~ error("A") + trend("Ad") + season("N"))
-)
-      
-
-gas_fit_todos <- gas_train |> 
-  model(
-    hw = ETS(Gas ~ error("M") + trend("Ad", phi = 0.8) + season("M")),
-    snaive = SNAIVE(box_cox(Gas, lambda = gas_lambda)),
-    hw_boxcox = ETS(box_cox(Gas, lambda = gas_lambda) ~ error("A") + trend("Ad") + season("A")),
-    stlf = STLF,
-    stlf_ets = STLF_ets
+gas_fit_todos <- gas_fit |> 
+  cross_join(hw) |> 
+  mutate(
+    snaive_stlf = (snaive + stlf)/2,
+    snaive_hwbc = (snaive + hw_boxcox)/2,
+    todos = (snaive + stlf + stlf_holt + hw + hw_boxcox)/5
   )
 
 gas_fit_todos
 ```
 
 ```{r}
-gas_fc_todos <- gas_fit_todos |> 
-  mutate(
-    top2 = (snaive + hw)/2,
-    todos = (snaive + hw + stlf_ets + hw_boxcox + stlf)/5
-  ) |> 
+gas_fc_todos <- gas_fit_todos  |> 
   forecast(h = "3 years")
 
 gas_fc_todos |> 
@@ -381,4 +381,5 @@ p <- gas_fc_todos |>
 
 plotly::ggplotly(p)
 ```
+
 
