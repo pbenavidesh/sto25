@@ -56,3 +56,12 @@ exports |>
   autoplot(price)
 ```
 
+# Ejercicio
+
+1. Realizar un pronóstico a dos años para la serie.
+2. Pueden utilizar cualquier método que hemos visto en clase.
+3. Se puede realizar en parejas.
+4. Entregar un informe en `Quarto` con el análisis y el pronóstico.
+5. La métrica de error a utilizar para calcular la precisión del pronóstico será el **MAE**.
+6. Fecha de entrega: 19 de septiembre.
+
