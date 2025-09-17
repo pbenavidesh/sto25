@@ -1,0 +1,58 @@
+---
+title: "Descargar datos de internet con `tidyquant`"
+format: html
+---
+
+# Datos
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(fpp3)
+library(tidyquant) #<1>
+```
+
+1. Cargamos la librería `tidyquant` que nos permite descargar datos económicos de internet (entre otras cosas).
+
+## Descarga
+
+Vamos a utilizar `tq_get()` para descargar los datos
+
+```{r}
+exports <- tq_get(
+  x = "EXPMX",           #<1>
+  get = "economic.data", #<2>
+  from = "1985-01-01",   #<3>
+  to = "2023-07-01"      #<4>
+)
+exports                  #<5>
+```
+
+1. El nombre de la(s) serie(s) que queremos descargar. En este caso, las exportaciones de EEUU a México (EXPMX).
+2. El tipo de dato y fuente de donde queremos descargarlos. En este caso, datos económicos del **FRED**.
+3. Fecha de inicio de los datos.
+4. Fecha final de los datos.
+5. La tabla resultante es una `tibble`.
+
+La `tibble` resultante tenemos que convertirla a `tsibble` y asegurarnos de que la variable de fecha tiene el formato correcto.
+
+## `tsibble`
+
+```{r}
+exports <- exports |> 
+  mutate(date = yearmonth(date)) |> #<1>
+  as_tsibble(index = date)          #<2>
+exports
+```
+
+1. Convertimos la variable `date` a formato `yearmonth`.
+2. Convertimos la `tibble` a `tsibble`, indicando que la variable de fecha es `date`.
+
+# EDA
+
+```{r}
+exports |> 
+  autoplot(price)
+```
+
