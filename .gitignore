@@ -1,6 +1,7 @@
 .Rproj.user
 .Rhistory
 .RData
+*.RData
 .Ruserdata
 *.Rproj
 # Created by https://www.toptal.com/developers/gitignore/api/windows,macos,r
