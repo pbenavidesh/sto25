@@ -127,12 +127,29 @@ exports_fit |>
   ggtitle("Diagnóstico de residuos para el modelo base")
 ```
 
+```{r}
+exports_fc <- exports_fit |> 
+  forecast(h = "2 years")
+
+exports_fc
+
+exports_fc |> 
+  accuracy(exports) |> 
+  arrange(MAE)
+
+p <- exports_fc |> 
+  autoplot(exports, level = NULL)
+
+plotly::ggplotly(p, dynamicTicks = TRUE)
+```
 
 
 
 ```{r}
+#| eval: false
+
 exports_fit |> 
-  select(naive) |>        #<1>
+  select(base) |>        #<1>
   refit(exports) |>       #<2>
   forecast(h = "2 years") #<3>
 ```
@@ -147,49 +164,45 @@ exports_fit |>
 La función `refit()` desafortunadamente `Si `refit()` no funciona con el modelo que eligieron, tienen que reentrenar manualmente el modelo final con los datos completos (reemplazar en este caso `exports_train` por `exports`).
 
 ```{r}
-exports |> 
-  model(naive = NAIVE(price)) |> 
-  forecast(h = "2 years")
+exports_final_fit <- exports |>                                                   #<1>
+  model(
+    base = decomposition_model(
+      STL(box_cox(price, exp_lambda) ~ season(window = "periodic"), robust = TRUE),
+      RW(season_adjust ~ drift()),
+      SNAIVE(season_year)
+    )
+  )
+
+exports_final_fit
 ```
+
+1. Copiamos la especificación del mejor modelo, y solo cambiamos los datos: antes usábamos los datos de entrenamiento (`exports_train`); ahora utilizamos todos los datos (`exports`).
 
 :::
 
+
 ```{r}
-exports_fit <- exports_train |> 
-  model(
-    stlf = decomposition_model(
-      STL(log(price), robust = TRUE),
-    RW(season_adjust ~ drift()),
-    SNAIVE(season_year)
-  ),
-  stlf2 = decomposition_model(
-    STL(log(price) ~ season(window = "periodic"), robust = TRUE),
-    ETS(season_adjust ~ error("A") + trend("Ad") + season("N")
-  )
-  ),
-  ets_aada = ETS(log(price) ~ error("A") + trend("Ad") + season("A")),
-  ets_madm = ETS(log(price) ~ error("M") + trend("Ad") + season("M"))
-  )
+exports_final_fc <- exports_final_fit |> 
+  forecast(h = "2 years")
 
-exports_fc <- exports_fit |> 
-  forecast(h = "2 years") 
+exports_final_fc
 
+exports_final_fc |> 
+  autoplot(exports)
 
-exports_fc
+p <- exports_final_fc |> 
+  autoplot(exports, level = NULL)
 
-exports_fc |>
-  accuracy(exports) |> 
-  arrange(MAE)
+plotly::ggplotly(p, dynamicTicks = TRUE)
 ```
 
 
 ```{r}
-eq_5 <- exports_fc |> 
-  filter(.model == "stlf") |> 
-  mutate(.model = "eq_5")
+eq_10 <- exports_final_fc |> 
+  filter(.model == "base") |> 
+  mutate(.model = "eq_10")
 
-eq_5
+eq_10
 
-save(eq_5, file = "eq_5.RData")
+save(eq_10, file = "eq_10.RData")
 ```
-
