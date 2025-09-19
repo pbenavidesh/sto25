@@ -58,14 +58,36 @@ exports |>
   autoplot(price)
 ```
 
+```{r}
+exp_lambda <- exports |> 
+  features(price, guerrero) |> 
+  pull(lambda_guerrero)
+
+exp_lambda
+
+exports |> 
+  autoplot(box_cox(price, exp_lambda))
+
+exports |> 
+  gg_season(box_cox(price, exp_lambda))
+```
+
+```{r}
+exports |> 
+  model(STL(box_cox(price, exp_lambda) ~ season(window = "periodic"), robust = TRUE)) |> 
+  components() |> 
+  autoplot()
+```
+
+
 # Ejercicio
 
 1.  Realizar un pronóstico a dos años para la serie (de agosto 2023 a julio de 2025).
 2.  Pueden utilizar cualquier método que hemos visto en clase.
 3.  Se puede realizar en parejas.
-4.  Entregar un informe en `Quarto` con el análisis y el pronóstico.
+4.  Entregar un informe en `html` con el análisis y el pronóstico y un archivo `.RData` con su pronóstico final.
 5.  La métrica de error a utilizar para calcular la precisión del pronóstico será el **MAE**.
-6.  Fecha de entrega: 19 de septiembre.
+6.  Fecha de entrega: 23 de septiembre.
 
 ```{r}
 exports_train <- exports |> 
@@ -73,26 +95,44 @@ exports_train <- exports |>
 exports_train
 ```
 
+## Modelo benchmark (de referencia)
+
+Dado que la serie tiene tendencia y estacionalidad, utilizar alguno de los métodos básicos por sí solo no produciría un buen modelo. Por lo tanto, vamos a utilizar un modelo de descomposición con drift y seasonal naive.
+
+
 ```{r}
 exports_fit <- exports_train |> 
   model(
-    media = MEAN(price),
-    naive = NAIVE(price),
+    base = decomposition_model(
+      STL(box_cox(price, exp_lambda) ~ season(window = "periodic"), robust = TRUE),
+      RW(season_adjust ~ drift()),
+      SNAIVE(season_year)
+    ),
+    media = MEAN(box_cox(price, exp_lambda)),
+    naive = NAIVE(box_cox(price, exp_lambda))
   )
 
-exports_fc <- exports_fit |>
-  forecast(h = "2 years")
-
-exports_fc |> 
-  accuracy(exports) |> 
-  arrange(MAE)
+exports_fit
 ```
 
-El modelo naive es mejor en este caso. Utilizaré este modelo para el pronóstico final:
+```{r}
+#| warning: false
+
+accuracy(exports_fit) |> 
+  arrange(MAE)
+
+exports_fit |> 
+  select(base) |> 
+  gg_tsresiduals() +
+  ggtitle("Diagnóstico de residuos para el modelo base")
+```
+
+
+
 
 ```{r}
 exports_fit |> 
-  select(media) |>        #<1>
+  select(naive) |>        #<1>
   refit(exports) |>       #<2>
   forecast(h = "2 years") #<3>
 ```
@@ -108,7 +148,7 @@ La función `refit()` desafortunadamente `Si `refit()` no funciona con el modelo
 
 ```{r}
 exports |> 
-  model(media = MEAN(price)) |> 
+  model(naive = NAIVE(price)) |> 
   forecast(h = "2 years")
 ```
 
