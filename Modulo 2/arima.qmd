@@ -1,0 +1,107 @@
+---
+title: "estacionariedad"
+format: html
+---
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(fpp3)
+```
+
+```{r}
+aus_production |> 
+  autoplot(Cement)
+
+aus_production |> 
+  autoplot(log(Cement))
+```
+
+```{r}
+aus_production |> 
+  features(log(Cement), unitroot_kpss)
+```
+
+
+
+Parece que logramos estabilizar la varianza con logaritmos. Falta estabilizar la media. Vamos a aplicar diferencias estacionales:
+
+```{r}
+#| warning: false
+
+aus_production |> 
+  autoplot(
+    Cement |> log() |> difference(lag = 4)
+  )
+```
+
+Vamos a comprobar si esta serie ya es estacionaria o no:
+
+```{r}
+aus_production |> 
+  features(log(Cement) |> difference(lag = 4), unitroot_kpss)
+```
+
+```{r}
+aus_production |> 
+  features(log(Cement), unitroot_nsdiffs)
+```
+
+La prueba `unitroot_nsdiffs` dice que se deben aplicar **diferencias estacionales** una vez para convertirla en estacionaria. Vamos a ver si, adicionalmente, se deben aplicar diferencias no estacionales:
+
+```{r}
+aus_production |> 
+  features(log(Cement) |> difference(4), unitroot_ndiffs)
+```
+
+```{r}
+aus_production |> 
+  features(log(Cement), unitroot_ndiffs)
+```
+
+```{r}
+#| warning: false
+aus_production |> 
+  autoplot(log(Cement) |> difference())
+
+aus_production |> 
+  features(log(Cement) |> difference(), unitroot_kpss)
+```
+# ARIMA
+
+```{r}
+cemento_desestacionalizado <- aus_production |> 
+  model(stl = STL(log(Cement), robust = TRUE)) |> 
+  components() |> 
+  select(Quarter, season_adjust) |> 
+  rename(Cement = season_adjust)
+
+cemento_desestacionalizado |> 
+  autoplot(Cement)
+```
+Vamos a modelar el cemento desestacionalizado usando ARIMA. La serie parece no ser estacionaria.
+
+```{r}
+cemento_desestacionalizado |>
+  features(Cement, unitroot_ndiffs)
+```
+
+La prueba me indica que necesitamos una diferencia no estacional. En otras palabras, sugiere que el orden `d` del modelo ARIMA debe ser 1 (`d=1`).
+
+Vamos a obtener los órdenes `p` y `q` observando las gráficas de la función de autocorrelación **ACF** y de la función de autocorrelación parcial **PACF**:
+
+```{r}
+cemento_desestacionalizado |> 
+  gg_tsdisplay(Cement, plot_type = 'partial')
+```
+
+Graficar la ACF y PACF de una serie que **no** es estacionaria no me sirve de nada. Vamos a graficar la serie en primeras diferencias:
+
+```{r}
+#| warning: false
+
+cemento_desestacionalizado |> 
+  gg_tsdisplay(Cement |> difference(), plot_type = 'partial')
+```
+
