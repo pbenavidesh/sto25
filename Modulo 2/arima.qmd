@@ -16,11 +16,39 @@ aus_production |>
 
 aus_production |> 
   autoplot(log(Cement))
+
+lambda <- aus_production |> 
+  features(Cement, guerrero) |> 
+  pull(lambda_guerrero)
+
+aus_production |> 
+  autoplot(box_cox(Cement, lambda))
+
+aus_production |> 
+  autoplot(box_cox(Cement, lambda))
 ```
 
 ```{r}
+#| warning: false
+
 aus_production |> 
-  features(log(Cement), unitroot_kpss)
+  autoplot(box_cox(Cement, lambda) |> difference(lag = 4, differences = 1))
+
+aus_production |> 
+  autoplot(box_cox(Cement, lambda) |> difference(lag = 4, differences = 2))
+
+aus_production |> 
+  autoplot(box_cox(Cement, lambda) |> difference(lag = 4) |> difference())
+
+aus_production |> 
+  autoplot(box_cox(Cement, lambda) |> difference())
+```
+
+
+
+```{r}
+aus_production |> 
+  features(box_cox(Cement, lambda), unitroot_kpss)
 ```
 
 
@@ -40,12 +68,12 @@ Vamos a comprobar si esta serie ya es estacionaria o no:
 
 ```{r}
 aus_production |> 
-  features(log(Cement) |> difference(lag = 4), unitroot_kpss)
+  features(box_cox(Cement, lambda) |> difference(lag = 4), unitroot_kpss)
 ```
 
 ```{r}
 aus_production |> 
-  features(log(Cement), unitroot_nsdiffs)
+  features(box_cox(Cement, lambda), unitroot_nsdiffs)
 ```
 
 La prueba `unitroot_nsdiffs` dice que se deben aplicar **diferencias estacionales** una vez para convertirla en estacionaria. Vamos a ver si, adicionalmente, se deben aplicar diferencias no estacionales:
@@ -103,5 +131,57 @@ Graficar la ACF y PACF de una serie que **no** es estacionaria no me sirve de na
 
 cemento_desestacionalizado |> 
   gg_tsdisplay(Cement |> difference(), plot_type = 'partial')
+```
+
+De acuerdo a la teoría y lo que alcanzamos a ver en la **ACF** y **PACF**, el modelo ARIMA a estimar sería un `ARIMA(2,1,2)`.
+
+```{r}
+cemento_fit <- cemento_desestacionalizado |> 
+  model(
+    arima_212 = ARIMA(Cement ~ pdq(2,1,2) + PDQ(0,0,0)),
+    arima_211 = ARIMA(Cement ~ pdq(2,2,1) + PDQ(0,0,0))
+  )
+
+cemento_fit
+
+cemento_fit |> 
+  select(arima_212) |>
+  report()
+
+cemento_fit |> 
+  select(arima_211) |>
+  report()
+
+cemento_fit |> glance()
+```
+```{r}
+#| warning: false
+
+cemento_desestacionalizado |> 
+  autoplot(Cement)
+
+cemento_desestacionalizado |> 
+  autoplot(Cement |> difference())
+
+cemento_desestacionalizado |> 
+  autoplot(Cement |> difference(differences = 2))
+```
+
+# Ejercicio
+
+```{r}
+noruega <- global_economy |>
+  filter(Country == "Norway") 
+
+noruega |>
+  autoplot(GDP)
+```
+
+```{r}
+noruega |> 
+  model(
+    arima = ARIMA(GDP ~ pdq(1,2,1))
+  ) |> 
+  report()
 ```
 
