@@ -139,7 +139,11 @@ De acuerdo a la teoría y lo que alcanzamos a ver en la **ACF** y **PACF**, el m
 cemento_fit <- cemento_desestacionalizado |> 
   model(
     arima_212 = ARIMA(Cement ~ pdq(2,1,2) + PDQ(0,0,0)),
-    arima_211 = ARIMA(Cement ~ pdq(2,2,1) + PDQ(0,0,0))
+    arima_212_log = ARIMA(log(Cement) ~ pdq(2,1,2) + PDQ(0,0,0)),
+    arima_211 = ARIMA(Cement ~ pdq(2,2,1) + PDQ(0,0,0)),
+    arima_312 = ARIMA(Cement ~ pdq(3,1,2) + PDQ(0,0,0)),
+    arima_213 = ARIMA(Cement ~ pdq(2,1,3) + PDQ(0,0,0)),
+    arima_415 = ARIMA(Cement ~ pdq(4,1,5) + PDQ(0,0,0))
   )
 
 cemento_fit
@@ -152,7 +156,11 @@ cemento_fit |>
   select(arima_211) |>
   report()
 
-cemento_fit |> glance()
+cemento_fit |> glance() |> 
+  arrange(AICc)
+
+cemento_fit |> 
+  accuracy()
 ```
 ```{r}
 #| warning: false
@@ -176,6 +184,16 @@ noruega <- global_economy |>
 noruega |>
   autoplot(GDP)
 ```
+
+```{r}
+mex <- global_economy |>
+  filter(Country == "Mexico") 
+
+mex |>
+  autoplot(GDP)
+```
+
+
 
 ```{r}
 noruega |> 
