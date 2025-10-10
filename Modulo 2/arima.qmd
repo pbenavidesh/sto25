@@ -287,6 +287,10 @@ noruega <- global_economy |>
 
 noruega |>
   autoplot(GDP)
+
+noruega_lambda <- noruega |>
+  features(GDP, guerrero) |>
+  pull(lambda_guerrero)
 ```
 
 
@@ -294,12 +298,60 @@ noruega |>
 
 
 ```{r}
+noruega_fit <- noruega |> 
+  model(
+    dayanni  = ARIMA(box_cox(GDP, noruega_lambda) ~ pdq(2,2,2) + PDQ(0,0,0)),
+    dayanni2 = ARIMA(box_cox(GDP, noruega_lambda) ~ pdq(3,2,2) + PDQ(0,0,0)),
+    paola    = ARIMA(box_cox(GDP, noruega_lambda) ~ pdq(1,2,1) + PDQ(0,0,0)),
+    blas     = ARIMA(box_cox(GDP, noruega_lambda) ~ pdq(2,1,1) + PDQ(0,0,0)),
+    fanny    = ARIMA(box_cox(GDP, noruega_lambda) ~ pdq(1,1,1) + PDQ(0,0,0)),
+    pablo    = ARIMA(box_cox(GDP, noruega_lambda) ~ PDQ(0,0,0)),
+    ets      = ETS(box_cox(GDP, noruega_lambda))
+  )
+
+noruega_fit |>
+  glance() |> 
+  arrange(AICc)
+
+noruega_fit |>
+  accuracy() |>
+  select(.model, .type, RMSE, MAE, MAPE) |>
+  arrange(MAPE)
+```
+
+```{r}
+tictoc::tic()
 noruega |> 
   model(
-    arima = ARIMA(GDP ~ pdq(1,2,1))
-  ) |> 
-  report()
+    dayanni  = ARIMA(box_cox(GDP, noruega_lambda) ~ pdq(2,2,2) + PDQ(0,0,0))
+  )
+tictoc::toc()
+
+tictoc::tic()
+noruega |> 
+  model(
+    pablo  = ARIMA(box_cox(GDP, noruega_lambda) ~ PDQ(0,0,0))
+  )
+tictoc::toc()
+
+tictoc::tic()
+noruega |> 
+  model(
+    pablo  = ARIMA(box_cox(GDP, noruega_lambda) ~ PDQ(0,0,0), stepwise = FALSE, approximation = FALSE)
+  )
+tictoc::toc()
+
+tictoc::tic()
+noruega |> 
+  model(
+    pablo2  = ARIMA(box_cox(GDP, noruega_lambda) ~ pdq(p = 0:3, d = 1) + PDQ(0,0,0))
+  )
+tictoc::toc()
 ```
+
+
+
+
 
 
 
@@ -312,13 +364,17 @@ h02 <- PBS |>
 
 h02_train <- h02 |> 
   filter_index(. ~ "2004 Jun.")
+```
 
-h02 |> 
+```{r}
+h02_train |> 
   autoplot(Cost)
 
-h02 |> 
+h02_train |> 
   autoplot(log(Cost))
 ```
+
+
 ```{r}
 h02 |> 
   features(log(Cost), unitroot_nsdiffs)
