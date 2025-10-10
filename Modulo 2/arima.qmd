@@ -1,6 +1,9 @@
 ---
 title: "estacionariedad"
-format: html
+format: 
+  html:
+    embed-resources: true
+    toc: true
 ---
 
 ```{r}
@@ -8,6 +11,7 @@ format: html
 
 library(tidyverse)
 library(fpp3)
+library(patchwork)
 ```
 
 ```{r}
@@ -107,6 +111,9 @@ cemento_desestacionalizado <- aus_production |>
 
 cemento_desestacionalizado |> 
   autoplot(Cement)
+
+cemento_desestacionalizado |> 
+  autoplot(log(Cement))
 ```
 Vamos a modelar el cemento desestacionalizado usando ARIMA. La serie parece no ser estacionaria.
 
@@ -177,13 +184,7 @@ cemento_desestacionalizado |>
 
 # Ejercicio
 
-```{r}
-noruega <- global_economy |>
-  filter(Country == "Norway") 
-
-noruega |>
-  autoplot(GDP)
-```
+## PIB de México
 
 ```{r}
 mex <- global_economy |>
@@ -192,6 +193,103 @@ mex <- global_economy |>
 mex |>
   autoplot(GDP)
 ```
+
+```{r}
+mex_lambda <- mex |> 
+  features(GDP, guerrero) |> 
+  pull(lambda_guerrero)
+
+p1 <- mex |>
+  autoplot(GDP) +
+  ggtitle("Serie en niveles")
+
+p2 <- mex |> 
+  autoplot(log(GDP)) +
+  ggtitle("Serie en logaritmos")
+
+p3 <- mex |> 
+  autoplot(box_cox(GDP, mex_lambda)) +
+  ggtitle("Serie con Box-Cox")
+
+p1|p2|p3
+```
+```{r}
+mex |> 
+  mutate(
+    log_gdp = log(GDP),
+    bc_gdp = box_cox(GDP, mex_lambda)
+  ) |> 
+  pivot_longer(c(GDP, log_gdp, bc_gdp)) |>
+  features(value, unitroot_ndiffs)
+
+```
+
+```{r}
+mex_fit <- mex |> 
+  model(
+    mafer     = ARIMA(box_cox(GDP, mex_lambda) ~ pdq(2,1,2) + PDQ(0,0,0)),
+    mateo     = ARIMA(box_cox(GDP, mex_lambda) ~ pdq(2,1,1) + PDQ(0,0,0)),
+    ana_luisa = ARIMA(log(GDP) ~ pdq(2,1,0) + PDQ(0,0,0)),
+    hector    = ARIMA(GDP ~ pdq(1,1,1) + PDQ(0,0,0)),
+    arturo    = ARIMA(box_cox(GDP, mex_lambda) ~ pdq(1,2,1) + PDQ(0,0,0)),
+    pablo     = ARIMA(box_cox(GDP, mex_lambda) ~ PDQ(0,0,0)),
+    ets       = ETS(box_cox(GDP, mex_lambda)),
+    semi      = ARIMA(box_cox(GDP, mex_lambda) ~ pdq(p = 0:3, d = 1) + PDQ(0,0,0))
+  )
+
+
+mex_fit |> 
+  select(pablo) |> 
+  report()
+
+mex_fit
+
+mex_fit |> 
+  glance() |> 
+  arrange(AICc)
+
+mex_fit |> 
+  accuracy() |>
+  select(.model, RMSE, MAE, MAPE) |>
+  arrange(MAPE)
+```
+
+```{r}
+tictoc::tic()
+mex |> 
+  model(
+    mafer = ARIMA(box_cox(GDP, mex_lambda) ~ pdq(2,1,2) + PDQ(0,0,0))
+  )
+tictoc::toc()
+
+tictoc::tic()
+mex |> 
+  model(
+    auto_arima = ARIMA(box_cox(GDP, mex_lambda) ~ PDQ(0,0,0))
+  )
+tictoc::toc()
+
+tictoc::tic()
+mex |> 
+  model(
+    auto_arima = ARIMA(box_cox(GDP, mex_lambda) ~ PDQ(0,0,0), stepwise = FALSE, approximation = FALSE)
+  )
+tictoc::toc()
+```
+
+
+
+## PIB de Noruega
+
+```{r}
+noruega <- global_economy |>
+  filter(Country == "Norway") 
+
+noruega |>
+  autoplot(GDP)
+```
+
+
 
 
 
@@ -202,4 +300,57 @@ noruega |>
   ) |> 
   report()
 ```
+
+
+
+# SARIMA
+
+```{r}
+h02 <- PBS |> 
+  filter(ATC2 == "H02")  |> 
+  summarise(Cost = sum(Cost)/1e6)
+
+h02_train <- h02 |> 
+  filter_index(. ~ "2004 Jun.")
+
+h02 |> 
+  autoplot(Cost)
+
+h02 |> 
+  autoplot(log(Cost))
+```
+```{r}
+h02 |> 
+  features(log(Cost), unitroot_nsdiffs)
+```
+Aplicando 1 vez las diferencias estacionales:
+
+```{r}
+#| warning: false
+
+h02 |> 
+  autoplot(log(Cost) |> difference(lag = 12))
+```
+
+```{r}
+h02 |> 
+  features(log(Cost) |> difference(lag = 12), unitroot_ndiffs)
+```
+
+```{r}
+#| warning: false
+
+h02 |> 
+  gg_tsdisplay(log(Cost), plot_type = 'partial', lag_max = 48)
+
+h02 |> 
+  gg_tsdisplay(log(Cost) |> difference(lag = 12) |> difference(), plot_type = 'partial', lag_max = 48)
+
+h02 |> 
+  gg_tsdisplay(log(Cost) |> difference(lag = 12), plot_type = 'partial', lag_max = 48)
+```
+
+## Ejercicio
+
+Pronóstico a 4 años utilizando SARIMA. Se busca el menor MAPE de pronóstico.
 
