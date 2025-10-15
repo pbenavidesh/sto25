@@ -57,3 +57,82 @@ Algunas alternativas de modelos a utilizar:
 
 Utilizaremos el **MASE** como métrica de error en el pronóstico.
 
+## Modelo de referencia
+
+```{r}
+benchmark <- decomposition_model(
+  STL(price, robust = TRUE),
+  SNAIVE(season_year),
+  RW(season_adjust ~ drift())
+)
+```
+
+
+## Ajuste de modelos
+
+### STL + SNAIVE + ETS
+
+Modelo de descomposición STL con logaritmos, SNAIVE para la estacionalidad y ETS(A,A,N) para la serie desestacionalizada:
+
+```{r}
+stl_ets <- decomposition_model(
+  STL(log(price), robust = TRUE),
+  ETS(season_adjust ~ error("A") + trend("A") + season("N"))
+)
+
+
+```
+
+### STL + SNAIVE + ARIMA
+
+Modelo de descomposición STL con logaritmos, SNAIVE para la estacionalidad y auto-ARIMA (*no estacional*) para la serie desestacionalizada:
+
+```{r}
+stl_arima <- decomposition_model(
+  STL(log(price), robust = TRUE),
+  ARIMA(season_adjust ~ PDQ(0,0,0))
+)
+```
+
+## Combinación ETS + ARIMA
+
+Se puede definir un modelo combinado desde el inicio usando 
+
+```{r}
+comb_ets_arima <- combination_model(
+  ETS(log(price)),
+  ARIMA(log(price))
+)
+```
+
+
+## Tabla de modelos
+
+```{r}
+gasto_fit <- gasto_train |>
+  model(
+    benchmark      = benchmark,
+    arima          = ARIMA(log(price)),
+    ets            = ETS(log(price)),
+    stl_ets        = stl_ets,
+    stl_arima      = stl_arima,
+    comb_ets_arima = comb_ets_arima
+  )
+
+accuracy(gasto_fit) |> 
+  select(.model, .type, RMSE, MAE, MAPE, MASE) |> 
+  arrange(MASE)
+```
+
+## Pronósticos
+
+```{r}
+gasto_fc <- gasto_fit |> 
+  forecast(h = "3 years")
+
+p <- gasto_fc |> 
+  autoplot(gasto_tsb, level = NULL)
+
+plotly::ggplotly(p, dynamicTicks = TRUE)
+```
+
