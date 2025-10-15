@@ -1,0 +1,31 @@
+---
+title: "Incorporando ETS y el filtro ARIMA a pronósticos con Descomposición"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+---
+
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(fpp3)
+library(ggtime)
+```
+
+## Datos
+
+Vamos a descargar el gasto de consumo real en México desde el FRED.
+
+```{r}
+gasto_raw <- tidyquant::tq_get(
+  x    = "NCRNSAXDCMXQ",
+  get  = "economic.data",
+  from = "1993-01-01",
+)
+
+gasto_raw
+```
+

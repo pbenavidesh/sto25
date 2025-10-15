@@ -410,3 +410,11 @@ h02 |>
 
 Pronóstico a 4 años utilizando SARIMA. Se busca el menor MAPE de pronóstico.
 
+```{r}
+h02_train |> 
+  model(
+    arima1 = ARIMA(log(Cost) ~ pdq(2,1,1) + PDQ(1,1,2)),
+    arima2 = ARIMA(log(Cost) ~ pdq(2,1,2) + PDQ(1,1,2))
+  )
+```
+
