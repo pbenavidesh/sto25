@@ -27,5 +27,33 @@ gasto_raw <- tidyquant::tq_get(
 )
 
 gasto_raw
+
+gasto_tsb <- gasto_raw |> 
+  mutate(date = yearquarter(date)) |> 
+  as_tsibble(index = date)
+
+gasto_tsb
+
+gasto_train <- gasto_tsb |> 
+  filter_index(. ~ "2022 Q1")
+
+gasto_train |> 
+  autoplot(price)
 ```
+
+# Ejercicio
+
+Realizar un pronóstico a 3 años (12 trimestres) utilizando todo lo que hemos visto en clase hasta ahora:
+
+- Modelo de referencia (*benchmark*): STL + SNAIVE + Drift
+
+Algunas alternativas de modelos a utilizar:
+
+- ETS
+- ARIMA
+- Modelos de descomposición mezclando con ETS y/o ARIMA
+- Utilizar o no transformaciones matemáticas
+- Combinar dos o más modelos distintos
+
+Utilizaremos el **MASE** como métrica de error en el pronóstico.
 
