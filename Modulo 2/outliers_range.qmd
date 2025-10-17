@@ -1,0 +1,241 @@
+---
+title: "Dealing with some practical issues in time series"
+format: 
+  html:
+    embed-resources: true
+    toc: true
+---
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(fpp3)
+```
+
+
+## Outliers
+
+```{r}
+ah <- tourism |>
+  filter(
+    Region == "Adelaide Hills", Purpose == "Visiting"
+  ) 
+
+ah |>
+  autoplot(Trips) +
+  labs(title = "Quarterly overnight trips to Adelaide Hills",
+       y = "Number of trips")
+```
+```{r}
+ah |> 
+  model(STL(Trips, robust = TRUE)) |> 
+  components() |> 
+  autoplot()
+```
+
+
+```{r}
+ah_decomp <- ah |>
+  # Fit a non-seasonal STL decomposition
+  model(
+    stl = STL(Trips ~ season(period = 1), robust = TRUE)
+  ) |>
+  components()
+ah_decomp |> autoplot()
+```
+
+
+```{r}
+outliers <- ah_decomp |>
+  filter(
+    remainder < quantile(remainder, 0.25) - 1.5 *IQR(remainder) |
+    remainder > quantile(remainder, 0.75) + 1.5 *IQR(remainder)
+  )
+outliers
+```
+
+## Valores omitidos
+
+```{r}
+ah_miss <- ah |>
+  # Remove outlying observations
+  anti_join(outliers) |>
+  # Replace with missing values
+  fill_gaps()
+
+ah_miss
+```
+
+```{r}
+ah_miss |>
+  model(ARIMA(Trips)) |> 
+  augment()
+```
+
+
+```{r}
+ah_fill <- ah_miss |>
+  # Fit ARIMA model to the data containing missing values
+  model(ARIMA(Trips)) |>
+  # Estimate Trips for all periods
+  interpolate(ah_miss)
+
+ah_miss
+ah_fill
+
+ah_fill |>
+  # Only show outlying periods
+  right_join(outliers |> select(-Trips))
+```
+
+
+```{r}
+ah |> 
+  autoplot(Trips, color = "gray") +
+  autolayer(ah_fill, Trips, color = "black")+
+  autolayer(ah_fill |> filter_index("2002 Q3"~"2003 Q1"),
+    Trips, colour="dodgerblue", linewidth = 2) +
+  labs(title = "Quarterly overnight trips to Adelaide Hills",
+       y = "Number of trips")
+ah_fill |>
+  autoplot(Trips) +
+  autolayer(ah_fill |> filter_index("2002 Q3"~"2003 Q1"),
+    Trips, colour="dodgerblue", linewidth = 2) +
+  labs(title = "Quarterly overnight trips to Adelaide Hills",
+       y = "Number of trips")
+```
+
+```{r}
+ah |> 
+  model(ETS(Trips ~ error("A") + trend("Ad") + season("A"))) |> 
+  forecast(h = "5 years") |> 
+  autoplot(ah) +
+  ggtitle("Pronóstico con valores atípicos") + 
+  scale_y_continuous(limits = c(0, 100))
+
+ah_fill |> 
+  model(ETS(Trips ~ error("A") + trend("Ad") + season("A"))) |> 
+  forecast(h = "5 years") |> 
+  autoplot(ah_fill) +
+  ggtitle("Pronóstico quitando los outliers") + 
+  scale_y_continuous(limits = c(0, 100))
+```
+
+
+
+
+
+
+
+## Mantener los pronósticos positivos
+
+
+```{r}
+egg_prices <- prices |> filter(!is.na(eggs))
+egg_prices |>
+  model(ETS(eggs ~ trend("A"))) |>
+  forecast(h = 50) |>
+  autoplot(egg_prices) +
+  labs(title = "Annual egg prices",
+       y = "$US (in cents adjusted for inflation) ",
+       caption = "The forecasts go below zero! That doesn't make any sense") +
+  geom_hline(yintercept = 0, color = "firebrick")
+
+```
+
+```{r}
+egg_prices |>
+  model(ETS(log(eggs) ~ trend("A"))) |>
+  forecast(h = 100) |>
+  autoplot(egg_prices) +
+  labs(title = "Annual egg prices",
+       y = "$US (in cents adjusted for inflation) ",
+       caption = "Using a log transformation, we prevent the forecasts to go below zero.") +
+  geom_hline(yintercept = 0, color = "firebrick")
+```
+
+
+
+## Mantener los pronósticos dentro de cierto rango
+
+Transformación logit escalada
+
+$$
+y=\log \left(\frac{x-a}{b-x}\right)
+$$
+
+$$
+w = \log (x)\\
+w = \exp(\log(x)) = x
+$$
+
+
+Para dar "reversa" a la transformación, necesitamos:
+
+$$
+x=\frac{(b-a) e^y}{1+e^y}+a
+$$
+
+Lo ponemos en una función:
+
+```{r}
+scaled_logit <- function(x, lower = 0, upper = 1) {
+  log((x - lower) / (upper - x))
+}
+inv_scaled_logit <- function(x, lower = 0, upper = 1) {
+  (upper - lower) * exp(x) / (1 + exp(x)) + lower
+}
+my_scaled_logit <- new_transformation(
+                    scaled_logit, inv_scaled_logit)
+```
+
+
+```{r}
+egg_prices |>
+  model(
+    ETS(my_scaled_logit(eggs, lower = 50, upper = 400)
+          ~ trend("A"))
+  ) |>
+  forecast(h = 50) |>
+  autoplot(egg_prices) +
+  labs(title = "Annual egg prices",
+       y = "$US (in cents adjusted for inflation) ") +
+  geom_hline(yintercept = 50, color = "firebrick", linetype = "dashed") +
+  geom_hline(yintercept = 400, color = "firebrick", linetype = "dashed")
+```
+
+##
+
+```{r}
+google_stock <- gafa_stock %>%
+  filter(Symbol == "GOOG") %>%
+  mutate(day = row_number()) %>%
+  update_tsibble(index = day, regular = TRUE)
+
+# Filter the year of interest
+google_2015 <- google_stock %>% filter(year(Date) == 2015)
+
+google_2015 |> 
+  autoplot()
+```
+```{r}
+fit <- google_2015 %>%
+  model(NAIVE(Close))
+
+sim <- fit %>%  generate(h = 30, times = 5000, bootstrap = TRUE, seed = 123)
+
+google_2015 %>%
+  ggplot(aes(x = day)) +
+  geom_line(aes(y = Close), size = 1) +
+  geom_line(aes(y = .sim, colour = as.factor(.rep)), data = sim, size = 1) +
+  ggtitle("Google closing stock price") +
+  guides(col = FALSE)
+```
+
+```{r}
+google_fc <- fit |> 
+  forecast(h = 30, bootstrap = TRUE)
+
+```
+
