@@ -119,3 +119,112 @@ df |>
   theme(legend.position = "none")
 ```
 
+# Pronóstico
+
+## Train data
+
+```{r}
+us_change_train <- us_change |> 
+  filter_index(. ~ "2017 Q4")
+
+us_change_train
+```
+
+```{r}
+#| message: false
+
+us_change_train |> 
+  as_tibble() |> 
+  select(-Quarter) |> 
+  GGally::ggpairs()
+```
+
+## Model Estimation
+
+```{r}
+us_change_fit <- us_change_train |> 
+  model(
+    lm = TSLM(Consumption ~ Income + Production + Savings + Unemployment)
+  )
+
+us_change_fit |> 
+  report()
+```
+
+La ecuación de regresión propuesta es:
+
+$$
+y_{t,consumption} = \beta_0 + \beta_1 x_{t,income} + \beta_2 x_{t,production} + \ beta_3 x_{t,savings} + \beta_4 x_{t,unemployment} + \varepsilon_t
+$$
+
+## Pronóstico
+
+## Ex-post
+
+Aquí comparamos usando los datos del test.
+
+```{r}
+us_change_fc_ex_post <- us_change_fit |> 
+  forecast(new_data = us_change |> filter_index("2018 Q1" ~ .))
+
+us_change_fc_ex_post |>
+  autoplot(us_change|> filter_index("2010 Q1" ~ .)) +
+  ylab("Cambio % en Consumo") +
+  xlab("Año") +
+  ggtitle("Pronóstico ex-post del cambio porcentual en el Consumo en EEUU")
+
+us_change_fc_ex_post
+
+us_change_fc_ex_post |> 
+  accuracy(us_change)
+```
+
+## Ex-ante
+
+Necesitamos datos de las predictoras.
+
+```{r}
+us_change_long <- us_change |> 
+  pivot_longer(cols = - c(Quarter, Consumption)) 
+
+us_change_long
+
+us_change_long |> 
+  autoplot(value) +
+  facet_wrap(vars(name), scales = "free_y") + 
+  theme(legend.position = "none")
+```
+
+```{r}
+us_change_fc_predictors <- us_change_long |> 
+  model(
+    arima = ARIMA(value)
+  ) |> 
+  forecast(h = 6)
+
+us_change_fc_predictors
+```
+
+Los valores de la estimación puntual tenemos que ponerlos en una nueva tabla.
+
+```{r}
+us_change_new_data <- us_change_fc_predictors |> 
+  as_tsibble() |> 
+  select(-c(.model, value)) |> 
+  pivot_wider(names_from = name, values_from = .mean)
+
+us_change_new_data
+```
+
+```{r}
+us_change_fc_ex_ante <- us_change_fit |>
+  refit(us_change) |> 
+  forecast(new_data = us_change_new_data)
+
+us_change_fc_ex_ante |>
+  autoplot(us_change |> filter_index("2010 Q1" ~ .)) +
+  ylab("Cambio % en Consumo") +
+  xlab("Año") +
+  ggtitle("Pronóstico ex-ante del cambio porcentual en el Consumo en EEUU")
+```
+
