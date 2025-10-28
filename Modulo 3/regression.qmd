@@ -1,0 +1,121 @@
+---
+title: "regression"
+format: html
+---
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(fpp3)
+library(ggtime)
+```
+
+```{r}
+us_change |> 
+  ggplot(aes(x = Quarter)) +
+  geom_line(aes(y = Consumption, colour = "Consumo")) +
+  geom_line(aes(y = Income, colour = "Ingreso")) +
+  ylab("cambio %") + xlab("Año") +
+  guides(colour=guide_legend(title="Series")) + 
+  theme(legend.position = "top")
+```
+
+```{r}
+us_change |> 
+  ggplot(aes(x=Income, y=Consumption)) +
+    ylab("Consumo (cambio % trimestral)") +
+    xlab("Ingreso (cambio % trimestral)") +
+    geom_point() +
+    geom_smooth(method="lm", se=FALSE)
+```
+
+```{r}
+fit1 <- us_change |> 
+  model(
+    lm = TSLM(Consumption ~ Income)
+  ) 
+
+fit1 |> 
+  report()
+```
+```{r}
+augment(fit1) |>  
+  ggplot(aes(x = Quarter)) +
+  geom_line(aes(y = Consumption, color = "Datos")) +
+  geom_line(aes(y = .fitted, color = "Fitted"))+
+  xlab("Año") + ylab(NULL) +
+  ggtitle("Cambios porcentuales en el gasto de Consumo en EEUU") +
+  guides(color = guide_legend(title = NULL))
+```
+
+
+```{r}
+augment(fit1) |>  
+  ggplot(aes(x = Consumption, y = .fitted)) +
+  geom_point() +
+  ylab("Fitted (valores ajustados)") +
+  xlab("Datos (reales históricos)") +
+  ggtitle("Cambios porcentuales en el gasto de Consumo en EEUU") +
+  geom_abline(intercept = 0, slope = 1)
+```
+
+```{r}
+fit1 |> 
+  gg_tsresiduals()
+```
+
+```{r}
+#| message: false
+
+us_change |>  
+  as_tibble() |> 
+  select(-Quarter) |>  
+  GGally::ggpairs()
+```
+
+```{r}
+fit2 <- us_change |> 
+  model(
+    lm2 = TSLM(Consumption ~ Income + Production + Savings + Unemployment)
+  ) 
+
+fit2 |> 
+  report()
+```
+```{r}
+augment(fit2) |>  
+  ggplot(aes(x = Quarter)) +
+  geom_line(aes(y = Consumption, color = "Datos")) +
+  geom_line(aes(y = .fitted, color = "Fitted"))+
+  xlab("Año") + ylab(NULL) +
+  ggtitle("Cambios porcentuales en el gasto de Consumo en EEUU") +
+  guides(color = guide_legend(title = NULL))
+```
+
+```{r}
+augment(fit2) |>  
+  ggplot(aes(x = Consumption, y = .fitted)) +
+  geom_point() +
+  ylab("Fitted (valores ajustados)") +
+  xlab("Datos (reales históricos)") +
+  ggtitle("Cambios porcentuales en el gasto de Consumo en EEUU") +
+  geom_abline(intercept = 0, slope = 1)
+```
+
+```{r}
+fit2 |> 
+  gg_tsresiduals()
+```
+
+```{r}
+df <- left_join(us_change, residuals(fit2), by = "Quarter")
+df |> 
+  select(-c(Consumption, .model)) |>  
+  pivot_longer(cols = c(Income:Unemployment)) |>  
+  ggplot(aes( x = value, y = .resid, color = name)) + 
+  geom_point() + ylab("Residuales") + xlab("Predictoras") +
+  facet_wrap(~ name, scales = "free_x") +
+  theme(legend.position = "none")
+```
+
