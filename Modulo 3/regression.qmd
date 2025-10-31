@@ -83,6 +83,7 @@ fit2 <- us_change |>
 fit2 |> 
   report()
 ```
+
 ```{r}
 augment(fit2) |>  
   ggplot(aes(x = Quarter)) +
@@ -226,5 +227,36 @@ us_change_fc_ex_ante |>
   ylab("Cambio % en Consumo") +
   xlab("Año") +
   ggtitle("Pronóstico ex-ante del cambio porcentual en el Consumo en EEUU")
+```
+
+```{r}
+us_change_train_new_data <-  us_change_train |> 
+  pivot_longer(cols = -c(Quarter, Consumption)) |>
+  model(
+    arima = ARIMA(value)
+  ) |> 
+  forecast(h = 6) |>
+  as_tsibble() |> 
+  select(-c(.model, value)) |> 
+  pivot_wider(names_from = name, values_from = .mean)
+
+us_change_fc_ex_ante_train <- us_change_fit |>
+  forecast(new_data = us_change_train_new_data) |> 
+  mutate(.model = "ex_ante_train")
+
+us_change_fc_ex_ante_train
+
+us_change_fc_ex_post_full <- us_change_fc_ex_post |> 
+  full_join(us_change_fc_ex_ante_train)
+
+us_change_fc_ex_post_full |> 
+  autoplot(us_change |> filter_index("2010 Q1" ~ .), level = NULL) +
+  ylab("Cambio % en Consumo") +
+  xlab("Año") +
+  ggtitle("Pronóstico ex-post vs ex-ante (train) del cambio porcentual en el Consumo en EEUU") +
+  guides(color = guide_legend(title = "Tipo de pronóstico"))
+
+us_change_fc_ex_post_full |>
+  accuracy(us_change)
 ```
 
