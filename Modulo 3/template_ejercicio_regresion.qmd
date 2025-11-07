@@ -1,0 +1,38 @@
+---
+title: "Ejercicio Regresión"
+format: html
+---
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(fpp3)
+library(ggtime)
+```
+
+```{r}
+series <- c("RSXFSN", "UNRATENSA", "PPIACO", "IPN221114T8N", "PERMITNSA")
+
+data_raw <- tidyquant::tq_get(
+  x = series,
+  get = "economic.data",
+  from = "1960-01-01"
+)
+
+data_raw
+```
+
+```{r}
+data_tsb_long <- data_raw |> 
+  mutate(date = yearmonth(date)) |> 
+  as_tsibble(key = symbol, index = date)
+
+data_tsb_long
+
+data_tsb_wide <- data_tsb_long |> 
+  pivot_wider(names_from = symbol, values_from = price)
+
+data_tsb_wide
+```
+

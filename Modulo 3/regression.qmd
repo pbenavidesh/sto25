@@ -165,6 +165,7 @@ $$
 Aquí comparamos usando los datos del test.
 
 ```{r}
+us_change |> filter_index("2018 Q1" ~ .)
 us_change_fc_ex_post <- us_change_fit |> 
   forecast(new_data = us_change |> filter_index("2018 Q1" ~ .))
 
@@ -184,7 +185,11 @@ us_change_fc_ex_post |>
 
 Necesitamos datos de las predictoras.
 
+
+
 ```{r}
+us_change
+
 us_change_long <- us_change |> 
   pivot_longer(cols = - c(Quarter, Consumption)) 
 
@@ -258,5 +263,38 @@ us_change_fc_ex_post_full |>
 
 us_change_fc_ex_post_full |>
   accuracy(us_change)
+```
+
+## Pronósticos con escenarios
+
+```{r}
+escenarios <- scenarios(
+  pesimista = new_data(us_change, 6) |> 
+    mutate(
+      Income       = c(-1.0, -0.5, 0.0, -0.5, -1.0, -1.5),
+      Production   = c(-0.5, -0.5, -0.5, -1.0, -1.0, -1.5),
+      Savings      = c(0.5, 0.5, 0.0, 0.5, 0.5, 1.0),
+      Unemployment = c(0.5, 0.5, 1.0, 1.0, 1.5, 2.0)
+    ),
+  optimista = new_data(us_change, 6) |> 
+    mutate(
+      Income       = c(1.0, 1.5, 2.0, 1.5, 1.0, 0.5),
+      Production   = c(1.0, 1.0, 1.5, 1.5, 2.0, 2.5),
+      Savings      = c(-0.5, -0.5, -1.0, -1.0, -1.5, -2.0),
+      Unemployment = c(-0.5, -0.5, -1.0, -1.0, -1.5, -2.0)
+    )
+)
+
+us_change_fc_scenarios <- us_change_fit |> 
+  refit(us_change) |> 
+  forecast(new_data = escenarios)
+
+us_change |> 
+  autoplot(Consumption) +
+  autolayer(us_change_fc_scenarios, level = NULL) +
+  autolayer(us_change_fc_ex_ante, level = NULL) +
+  ylab("Cambio % en Consumo") +
+  xlab("Año") +
+  ggtitle("Pronóstico con escenarios del cambio porcentual en el Consumo en EEUU")
 ```
 
