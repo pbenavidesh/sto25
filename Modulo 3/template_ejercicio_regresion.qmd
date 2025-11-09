@@ -1,38 +1,182 @@
 ---
 title: "Ejercicio Regresión"
-format: html
+format: 
+  revealjs:
+    scrollable: true
+    incremental: true
+    smaller: true
+    theme: default
+    embed-resources: true
+execute:
+  echo: true
+  output-location: column-fragment
 ---
 
 ```{r}
 #| message: false
+#| include: false
 
 library(tidyverse)
 library(fpp3)
 library(ggtime)
 ```
 
+# Instrucciones
+
+## Objetivo
+
+1. El ejercicio consiste en realizar un análisis de regresión para la serie que eligieron, con el propósito de **realizar pronósticos a 3 años**.
+
+2. Lo primero que deben realizar es un análisis exploratorio de su variable de pronóstico *(saber qué es, para qué se utiliza, cómo se mide, en qué unidades está, etc.)*.
+
+---
+
+3. Posteriormente, deben elegir **al menos 8 series predictoras** que consideren que pueden ayudar a pronosticar la variable objetivo.  *(recuerden que las series predictoras deben tener sentido económico y estar relacionadas con la variable a pronosticar)*. Para esto, pueden apoyarse de la inteligencia artificial para que les sugiera posibles series predictoras:
+  
+  - Les sugiero utilizar el GPT diseñado especialmente para la materia, [**Elendil TA**](https://chatgpt.com/g/g-68e6907c12a48191a07fb0888500a7fa-elendil-ta).
+  
+  - Ustedes deben cuestionar y validar las sugerencias que les haga la IA. Aquí el papel del analista es fundamental. *(es lo que va a impedir que se queden sin chamba o que sean reemplazados por una IA en el futuro, o que queden como* 🤡*)*.
+  
+  - Idealmente, las series que van a elegir deben ser series económicas que se puedan descargar desde FRED *(para facilitar su descarga)*.
+
+---
+
+4. Ya que tengan las predictoras, realizar el análisis de regresión completo y evaluar si todas esas predictoras se van a quedar en el modelo final o si se debe quitar alguna.
+  - Recuerden evaluar los supuestos del modelo de regresión lineal múltiple.
+  
+  - Pueden utilizar técnicas de selección de variables si lo consideran necesario.
+  
+  - Justifiquen todas sus decisiones y muestren el procedimiento que siguieron.
+
+--- 
+
+5. Finalmente, realicen los tres tipos de pronósticos que vimos para regresión a 3 años y evalúen su desempeño utilizando las métricas que consideren adecuadas. Para los pronósticos basados en escenarios, definir arbitrariamente 2 escenarios:
+  - **Optimista:** El desempeño de su variable de pronóstico mejora (dependiendo la variable que les tocó, esto podria significar que aumente o disminuya).
+  - **Pesimista:** El desempeño de su variable de pronóstico empeora.
+
+:::{.callout-note}
+## Sobre los tipos de pronóstico
+La diferencia entre los tipos de pronóstico es qué se hace con las predictoras (las $x$):
+
+### Ex-post
+Es cuando separamos en train/test y se usan los valores reales del test en las $x$ (*No son pronósticos reales*).
+
+### Ex-ante
+**Se deben pronosticar las predictoras** primero y luego usar esos pronósticos para hacer el pronóstico. (*estos son los únicos pronósticos reales*).
+
+### Escenarios
+Se definen cuantos escenarios quieran y se eligen arbitrariamente los valores de las $x$, dependiendo lo que se quiera evaluar (*es como si se plantearan ¿qué pasaría si...?*).
+
+:::
+  
+## Formato de entrega
+
+1. Todo el ejercicio debe estar contenido en un documento de **Quarto** `(.qmd)` con formato de salida `revealjs` (presentación de html) o `pptx`(PowerPoint).
+
+:::{.callout-important appearance="simple"}
+En las presentaciones, el código se oculta por default, si quieren que algún chunk muestre el código, es necesario agregar la opción `echo: true` al chunk. P. ej.:
+
+```
+#| echo: true
+
+1 + 1
+```
+:::
+ 
+:::{.callout-tip}
+## Encabezado YAML para los formatos de salida
+
+### `revealjs`
+
+```
+---
+format: 
+  revealjs:
+    scrollable: true
+    incremental: true
+    theme: default
+    embed-resources: true
+---
+```
+- Pueden consultar la documentación aquí: [Revealjs Quarto](https://quarto.org/docs/presentations/revealjs/)
+
+### `pptx`
+```
+---
+format: 
+  pptx:
+    incremental: true
+---
+```
+- Pueden consultar la documentación aquí: [PowerPoint Quarto](https://quarto.org/docs/presentations/powerpoint.html)
+:::
+
+# Datos y código de muestra
+
+## Descarga de datos
+
 ```{r}
-series <- c("RSXFSN", "UNRATENSA", "PPIACO", "IPN221114T8N", "PERMITNSA")
+series <- c("RSXFSN", "UNRATENSA", "PPIACO", "IPN221114T8N", "PERMITNSA") # <1>
 
 data_raw <- tidyquant::tq_get(
-  x = series,
-  get = "economic.data",
-  from = "1960-01-01"
+  x    = series,
+  get  = "economic.data",
+  from = "1960-01-01"                                                     # <2> 
 )
 
 data_raw
 ```
+
+1. El listado de series que queremos descargar
+2. Fecha de inicio de las series
+
+::: {.callout-important}
+Las series a modelar tienen una periodicidad **mensual**, por lo que es importante asegurarse de que las predictoras que hayan elegido para el análisis también tengan la misma periodicidad.
+:::
+
+## Transformación a tsibble
+
+### `tsibble` en formato largo
 
 ```{r}
 data_tsb_long <- data_raw |> 
   mutate(date = yearmonth(date)) |> 
   as_tsibble(key = symbol, index = date)
 
-data_tsb_long
+data_tsb_long                            #<1>
+```
 
+1. La `tsibble` así como la descargamos está en formato **largo *(long)* **. Este formato nos va a ser útil para realizar análisis o modelar todas las predictoras **simultánemente**, pero no para hacer la regresión.
+
+### `tsibble` en formato ancho
+
+```{r}
 data_tsb_wide <- data_tsb_long |> 
-  pivot_wider(names_from = symbol, values_from = price)
+  pivot_wider(names_from = symbol, values_from = price) |> #<2>
+  relocate(date, RSXFSN)                                   #<3>
 
 data_tsb_wide
 ```
+2. Convertimos la `tsibble` a formato **ancho *(wide)* **, que es el formato que necesitamos para hacer la regresión.
+3. Reordenamos las columnas para que la variable de pronóstico esté al principio. Sustituyan `RSXFSN` por la variable que les tocó pronosticar.
+
+---
+
+::: {.callout-tip}
+## Ejemplo de visualización de todas las series
+
+```{r}
+
+data_tsb_long |> 
+  autoplot(price) +
+  facet_wrap(vars(symbol), scales = "free_y") + 
+  theme(legend.position = "none") +
+  labs(
+    title   = "Series descargadas desde FRED",
+    x       = "Año",
+    y       = "",
+    caption = "Fuente: Federal Reserve Economic Data (FRED)"
+  )
+```
+:::
 

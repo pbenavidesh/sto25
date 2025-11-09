@@ -1,0 +1,116 @@
+---
+title: "Untitled"
+format: html
+---
+
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(fpp3)
+library(ggtime)
+```
+
+```{r}
+recent_production <- aus_production |> 
+  filter(year(Quarter) >= 1992)
+
+recent_production |> 
+  autoplot(Beer)
+```
+
+```{r}
+beer_fit <- recent_production |> 
+  model(
+    ets   = ETS(Beer),
+    arima = ARIMA(Beer),
+    tslm  = TSLM(Beer ~ trend() + season())
+  )
+
+beer_fit |> 
+  select(tslm) |> 
+  report()
+
+beer_fit |> 
+  accuracy() |> 
+  arrange(MASE)
+```
+
+```{r}
+p <- augment(beer_fit) |>  
+  ggplot(aes(x = Quarter)) +
+  geom_line(aes(y = Beer, color = "Datos")) +
+  geom_line(aes(y = .fitted, color = "Fitted")) +
+  labs(x = "Año", y = "Megalitros")
+
+plotly::ggplotly(p)
+```
+
+
+```{r}
+cerveza <- recent_production |> 
+  mutate(
+    q2_94 = if_else(Quarter == yearquarter("1994 Q2"),1,0),
+    q4_04 = if_else(Quarter == yearquarter("2004 Q4"),1,0)
+  )
+
+cerveza_fit <- cerveza |>
+  model(
+    ets   = ETS(Beer),
+    arima = ARIMA(Beer),
+    tslm  = TSLM(Beer ~ trend() + season() + q2_94 + q4_04)
+  )
+
+cerveza_fit |>
+  select(tslm) |>
+  report()
+
+cerveza_fit |> 
+  accuracy() |>
+  arrange(MASE)
+```
+
+```{r}
+p2 <- augment(cerveza_fit) |>
+  filter(.model == "tslm") |>
+  ggplot(aes(x = Quarter)) +
+  geom_line(aes(y = Beer, color = "Datos")) +
+  geom_line(aes(y = .fitted, color = "Fitted")) +
+  labs(x = "Año", y = "Megalitros")
+
+plotly::ggplotly(p2) 
+```
+
+
+
+```{r}
+boston_men <- boston_marathon |> 
+  filter(Event == "Men's open division") |> 
+  mutate(Minutes = as.numeric(Time)/60)
+
+p <- boston_men |> 
+  autoplot(Minutes) + 
+  ggtitle("Tiempos ganadores del maratón de Boston, categoría abierta de hombres")
+
+plotly::ggplotly(p)
+```
+
+```{r}
+fit_boston <- boston_men |> 
+  model(
+    lineal = TSLM(Minutes ~ trend()),
+    exponencial = TSLM(log(Minutes) ~ trend()),
+    `Reg. por partes` = TSLM(Minutes ~ trend(knots = c(1940,1980))),
+    `Reg. por partes2` = TSLM(Minutes ~ trend(knots = c(1922,1931,1980)))
+  )
+
+fc_boston <- fit_boston |> forecast(h = 10)
+
+boston_men |> 
+  autoplot(Minutes, level = NULL) +
+  geom_line(aes(y = .fitted, color = .model), data = fitted(fit_boston)) +
+  autolayer(fc_boston, alpha = 0.5, level = 95) +
+  ggtitle("Maratón de Boston, cat. abierta de hombres")
+```
+
