@@ -1,0 +1,151 @@
+---
+title: "Regresión dinámica"
+format: html
+---
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(fpp3)
+library(ggtime)
+```
+
+```{r}
+fit_1 <- us_change |> 
+  model(reg = TSLM(Consumption ~ Income))
+
+fit_1 |> 
+  report()
+
+fit_1 |> 
+  gg_tsresiduals()
+
+fit_1 |> 
+  augment() |> 
+  features(.innov, ljung_box, lag = 10, dof = 2)
+```
+```{r}
+fit_2 <- us_change |> 
+  model(reg = ARIMA(Consumption ~ Income))
+
+fit_2 |> 
+  report()
+
+fit_2 |> 
+  gg_tsresiduals()
+
+fit_2 |> 
+  augment() |> 
+  features(.innov, ljung_box, lag = 10, dof = 2)
+```
+
+
+
+
+```{r}
+fit_2 <- us_change |> 
+  model(dyn_reg = TSLM(Consumption ~ Income + Production + Savings + Unemployment))
+
+fit_2 |> 
+  report()
+
+fit_2 |> 
+  gg_tsresiduals()
+
+fit_2 |> 
+  augment() |> 
+  features(.innov, ljung_box, lag = 10, dof = 6)
+```
+
+## Victoria electricity
+
+```{r}
+vic_elec_daily <- vic_elec |>
+  filter(year(Time) == 2014) |>
+  index_by(Date = date(Time)) |>
+  summarise(
+    Demand = sum(Demand)/1e3,
+    Temperature = max(Temperature),
+    Holiday = any(Holiday)
+  ) |>
+  mutate(Day_Type = case_when(
+    Holiday ~ "Holiday",
+    wday(Date) %in% 2:6 ~ "Weekday",
+    TRUE ~ "Weekend"
+  ))
+
+vic_elec_daily
+```
+
+```{r}
+vic_elec_daily |> 
+  autoplot(Demand)
+```
+
+```{r}
+vic_elec_daily |> 
+  ggplot(aes(x=Temperature, y=Demand, color = Day_Type)) +
+    geom_point() +
+    ylab("Electricity demand (GW)") +
+    xlab("Maximum daily temperature")
+```
+
+```{r}
+vic_fit <- vic_elec_daily |> 
+  model(
+    ARIMA(Demand ~ Temperature + I(Temperature^2) + (Day_Type=="Weekday") + season())
+  )
+
+vic_fit |> 
+  report()
+
+vic_fit |> 
+  gg_tsresiduals()
+```
+
+## Vic daily years
+
+```{r}
+vic_daily <- vic_elec |>
+  index_by(Date = date(Time)) |>
+  summarise(
+    Demand = sum(Demand)/1e3,
+    Temperature = max(Temperature),
+    Holiday = any(Holiday)
+  ) |>
+  mutate(Day_Type = case_when(
+    Holiday ~ "Holiday",
+    wday(Date) %in% 2:6 ~ "Weekday",
+    TRUE ~ "Weekend"
+  ))
+
+vic_daily |> 
+  autoplot(Demand)
+```
+
+## Valores rezagados de las predictoras
+
+```{r}
+insurance |> 
+  pivot_longer(Quotes:TVadverts) |>
+  ggplot(aes(x = Month, y = value)) +
+  geom_line() +
+  facet_grid(vars(name), scales = "free_y") +
+  labs(y = "", title = "Insurance advertising and quotations")
+```
+
+```{r}
+insurance_fit <- insurance |> 
+  mutate(Quotes = c(rep(NA,3), Quotes[4:40])) |> 
+  model(
+    lag0 = ARIMA(Quotes ~ pdq(d = 0) + TVadverts),
+    lag1 = ARIMA(Quotes ~ pdq(d = 0) + TVadverts + lag(TVadverts)),
+    lag2 = ARIMA(Quotes ~ pdq(d = 0) + TVadverts + lag(TVadverts) + lag(TVadverts, 2)),
+    lag3 = ARIMA(Quotes ~ pdq(d = 0) + TVadverts + lag(TVadverts) + lag(TVadverts, 2) + lag(TVadverts, 3))
+  )
+  
+glance(insurance_fit) |> 
+  arrange(AICc)
+```
+
