@@ -4,6 +4,13 @@
 *.RData
 .Ruserdata
 *.Rproj
+*.html
+
+Modulo 1/respuestas_p1*
+calificaciones_*
+parcial_1*
+grade_exam_a.R
+
 # Created by https://www.toptal.com/developers/gitignore/api/windows,macos,r
 # Edit at https://www.toptal.com/developers/gitignore?templates=windows,macos,r
 
