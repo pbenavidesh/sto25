@@ -1,0 +1,196 @@
+---
+title: "Estacionalidad compleja"
+format: 
+  html:
+    toc: true
+    embed-resources: true
+---
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(fpp3)
+library(ggtime)
+library(plotly)
+library(fable.prophet)
+```
+
+```{r}
+elec <- vic_elec |>
+  mutate(Hour = floor_date(Time, unit = "hour")) |> 
+  index_by(Hour) |>
+  summarise(
+    Demand      = sum(Demand),
+    Temperature = mean(Temperature),
+    Holiday     = any(Holiday)
+  ) |> 
+  mutate(
+    Day_Type = case_when(
+      Holiday ~ "Holiday",
+      wday(Hour, week_start = 1) %in% c(6, 7) ~ "Weekend",
+      TRUE ~ "Weekday"
+    ),
+    Work_day = Day_Type == "Weekday"
+  )
+
+elec_train <- elec |> 
+  filter_index(. ~ "2014-11-30")
+
+elec_test <- elec |> 
+  filter_index("2014-12-01" ~ .)
+
+p <- elec |>  
+  autoplot(Demand)
+
+ggplotly(p, dynamicTicks = TRUE) |> 
+  rangeslider()
+```
+
+```{r}
+p <- elec_train |> 
+  model(stl = STL(Demand ~ season(period = "year", window = "periodic") + season(period = "week", window = "periodic") + season(period = "day"), robust = TRUE)) |> 
+  components() |> 
+  autoplot()
+
+ggplotly(p, dynamicTicks = TRUE) |> 
+  rangeslider()
+```
+
+```{r}
+elec_train |> 
+  ggplot(aes(x = Temperature, y = Demand, color = Work_day)) +
+  geom_point(alpha = 0.3)
+```
+
+
+Esta serie tiene tres tipos de estacionalidad:
+
+- Anual
+- Semanal
+- Diaria
+
+Los periodos estacionales (`m`) de cada una son:
+
+| Tipo de estacionalidad | Periodo estacional (`m`) |
+|:----------------------:|:------------------------:|
+| Anual                  | 8766                     | 
+| Semanal                | 168                      |
+| Diaria                 | 24                       |
+
+ARIMA y ETS solo podrían modelar la estacionalidad diaria (m <= 24).
+
+Para modelar estas estacionalidades, podríamos hacer lo siguiente:
+
+1. Utilizar una regresión lineal múltiple y crear dummies estacionales para cada tipo de estacionalidad.
+
+| Tipo de estacionalidad | Periodo estacional (`m`) | Cantidad de dummies (n-1) |
+|:----------------------:|:------------------------:|:-------------------------:|
+| Anual                  | 8766                     | 8765                      |
+| Semanal                | 168                      | 167                       |
+| Diaria                 | 24                       | 23                        |
+
+  - En total, necesitaríamos `r `8765 + 167 + 23` dummies. Esto haría que el modelo fuera extremadamente complejo y propenso al sobreajuste.
+  
+2. Utilizar un pronóstico a partir de descomposición y modelar las estacionalidades con SNAIVE.
+
+```{r}
+benchmark <- decomposition_model(
+  STL(
+    Demand ~ season(period = "year", window = "periodic") + season(period = "week", window = "periodic") + season(period = "day"), robust = TRUE
+  ),
+  ARIMA(season_adjust ~ Temperature + I(Temperature^2) + Work_day + PDQ(0,0,0))
+)
+```
+
+3. Regresión Armónica Dinámica (Fourier + ARIMA).
+
+
+```{r}
+stl_fourier <- decomposition_model(
+  STL(
+    Demand ~ season(period = "year", window = "periodic") + season(period = "week", window = "periodic") + season(period = "day", window = "periodic"), robust = TRUE
+  ),
+  TSLM(season_day ~ fourier(K = 6)),
+  TSLM(season_week ~ fourier(K = 8)),
+  TSLM(season_year ~ fourier(K = 10)),
+  ARIMA(season_adjust ~ Temperature + I(Temperature^2) + Work_day + PDQ(0,0,0))
+)
+```
+
+
+4. Prophet.
+
+```{r}
+tictoc::tic()
+elec_fit <- elec_train |> 
+  model(
+    benchmark   = benchmark,
+    tslm        = TSLM(Demand ~ fourier("day", K = 4) + fourier("week", K = 6) + fourier("year", K = 8) + Temperature + I(Temperature^2) + Work_day),
+    stl_fourier = stl_fourier
+    # harmonic  = ARIMA(Demand ~ fourier("day", K = 4) + fourier("week", K = 6) + fourier("year", K = 8) + Temperature + I(Temperature^2) + Work_day + pdq(0:2,0:1,0:2) + PDQ(0,0,0)),
+    # Prophet = prophet(Demand ~ Temperature + I(Temperature^2) + Work_day)
+  )
+tictoc::toc()
+elec_fit
+```
+
+```{r}
+p <- elec_fit |> 
+  augment() |> 
+  ggplot(aes(x = Hour)) +
+  geom_line(aes(y = Demand))+
+  geom_line(aes(y = .fitted, color = .model))
+
+ggplotly(p, dynamicTicks = TRUE) |> 
+  rangeslider()
+```
+
+
+```{r}
+elec_fit |> 
+  accuracy() |> 
+  arrange(MAPE)
+```
+
+```{r}
+
+elec_fc <- elec_fit |> 
+  forecast(new_data = elec_test)
+
+p <- elec_fc |> 
+  autoplot(elec, level = NULL) 
+
+ggplotly(p, dynamicTicks = TRUE) |> 
+  rangeslider()
+```
+
+```{r}
+elec_fc |> 
+  accuracy(elec_test) |> 
+  arrange(MAPE)
+```
+
+Vamos a intentar combinando los tres modelos y ver si logramos mejores resultados.
+
+```{r}
+elec_fit_combi <- elec_fit |> 
+  mutate(combinado = (benchmark + tslm + stl_fourier)/3)
+
+elec_fc <- elec_fit_combi |> 
+  forecast(new_data = elec_test)
+
+p <- elec_fc |> 
+  autoplot(elec, level = NULL) 
+
+ggplotly(p, dynamicTicks = TRUE) |> 
+  rangeslider()
+```
+
+
+```{r}
+elec_fc |> 
+  accuracy(elec_test) |> 
+  arrange(MAPE)
+```
+

@@ -206,3 +206,28 @@ eq_10
 
 save(eq_10, file = "eq_10.RData")
 ```
+
+
+# TSCV
+
+```{r}
+exports_cv <- exports |> 
+  stretch_tsibble(.init = 120, .step = 12) |> 
+  relocate(symbol, date, .id)
+
+exports_cv
+```
+
+```{r}
+exports_cv |> 
+  model(
+    base = decomposition_model(
+      STL(box_cox(price, exp_lambda) ~ season(window = "periodic"), robust = TRUE),
+      RW(season_adjust ~ drift()),
+      SNAIVE(season_year)
+    )
+  ) |> 
+  forecast(h = "2 years") |> 
+  accuracy(exports)
+```
+

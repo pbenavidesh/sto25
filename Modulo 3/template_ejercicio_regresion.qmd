@@ -1,12 +1,13 @@
 ---
 title: "Ejercicio Regresión"
-format: 
+format:
   revealjs:
     scrollable: true
     incremental: true
     smaller: true
     theme: default
     embed-resources: true
+    output-file: ej_pres.html
 execute:
   echo: true
   output-location: column-fragment
