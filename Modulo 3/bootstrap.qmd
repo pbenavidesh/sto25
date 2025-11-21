@@ -1,6 +1,9 @@
 ---
-title: "Untitled"
-format: html
+title: "Bootstrapping & Bagging"
+format: 
+  html:
+    toc: true
+    embed-resources: true
 ---
 
 ```{r}
@@ -119,7 +122,21 @@ licores <- aus_retail |>
   filter(Industry == "Liquor retailing") |> 
   summarise(Turnover = sum(Turnover))
 
-licores |> 
+licores_train <- licores |> 
+  filter_index(. ~ "2016 Q4")
+
+licores_train |> 
   autoplot(Turnover)
 ```
-
+1. Utilizar de entrenamiento hasta 2016 Q4.
+1. Modelar la serie de venta de licores en Australia utilizando la técnica de Bootstrapping + Bagging (con ETS o el modelo de su preferencia).
+1. Comparar los resultados con
+  - un modelo ETS estándar sin bootstrap
+  - un modelo ARIMA estándar sin bootstrap
+  - un modelo hecho a partir de una descomposición STL (ustedes eligen los modelos a utilizar para cada componente)
+  - un modelo de regresión armónica dinámica
+  - Prophet
+1. Evaluar el ajuste de los modelos utilizando MAPE.
+1. Producir pronósticos a **2 años** y evaluar los errores de pronóstico con MAPE.
+  - Si lo ven conveniente, pueden generar combinaciones de los modelos realizados.
+1. Obtener conclusiones sobre cuál(es) modelo(s) fueron mejores.
