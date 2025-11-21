@@ -1,0 +1,125 @@
+---
+title: "Untitled"
+format: html
+---
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(fpp3)
+library(ggtime)
+```
+
+# Bootstrapping & Bagging for Time Series Forecasting
+
+## Introduction
+Bootstrapping dependent data requires preserving temporal structure. Standard IID resampling breaks autocorrelation patterns, leading to misleading inference. In time series, we use model-based, block-based, or STL-based bootstrap methods to simulate new paths that maintain seasonal and trend dependencies.
+
+::: {.callout-note}
+**Key idea:** A valid time series bootstrap preserves the dependence structure of the observed data.
+:::
+
+## 1. Visualizing the Data
+
+```{r}
+cement <- aus_production |>
+  filter(year(Quarter) >= 1988) |>
+  select(Quarter, Cement)
+
+cement |> autoplot(Cement)
+
+cement_stl <- cement |>
+  model(stl = STL(Cement))
+cement_stl |>
+  components() |>
+  autoplot()
+```
+
+## 2. Model-Based Residual Bootstrap (ETS)
+
+Fit a simple ETS model, then simulate bootstrap paths from its residuals.
+
+```{r}
+cement_stl |>
+  generate(new_data = cement, times = 500,
+           bootstrap_block_size = 8) |>
+  autoplot(.sim) +
+  autolayer(cement, Cement) +
+  guides(colour = "none") +
+  labs(title = "Cement production: Bootstrapped series",
+       y="Tonnes ('000)")
+```
+
+
+::: {.callout-warning}
+Residual bootstraps assume the model captures all structure; if not, simulated paths may reproduce model biases.
+:::
+
+
+
+::: {.callout-tip}
+**STL bootstrap** is robust to outliers and allows flexible seasonality, making it ideal for bagging.
+:::
+
+## 5. Bagged Forecasts
+
+Aggregate many bootstrapped forecasts to obtain a stable prediction.
+
+```{r}
+sim <- cement_stl |>
+  generate(new_data = cement, times = 100,
+           bootstrap_block_size = 8) |>
+  select(-.model, -Cement)
+
+sim
+```
+
+
+```{r}
+ets_forecasts <- sim |>
+  model(ets = ETS(.sim)) |>
+  forecast(h = 12)
+ets_forecasts |>
+  update_tsibble(key = .rep) |>
+  autoplot(.mean) +
+  autolayer(cement, Cement) +
+  guides(colour = "none") +
+  labs(title = "Cement production: bootstrapped forecasts",
+       y="Tonnes ('000)")
+```
+
+```{r}
+bagged <- ets_forecasts |>
+  summarise(bagged_mean = mean(.mean))
+cement |>
+  model(ets = ETS(Cement)) |>
+  forecast(h = 12) |>
+  autoplot(cement) +
+  autolayer(bagged, bagged_mean, color = "firebrick") +
+  labs(title = "Cement production in Australia",
+       y="Tonnes ('000)")
+```
+
+
+
+## ¿Cómo escoger el tamaño del bloque de Bootstrap?
+
+El tamaño del bloque de bootstrap afecta la preservación de la dependencia temporal. Bloques más grandes capturan mejor la estructura, pero reducen la variabilidad entre muestras. Bloques más pequeños aumentan la variabilidad, pero pueden romper patrones de autocorrelación.
+
+- Si la estructura de la autocorrelación es más de corto plazo, se sugeriría un bloque pequeño (3-10).
+- Si la estructura de la autocorrelación es más de largo plazo, se sugeririí un bloque más grande,  (10-20).
+- Regla empírica: El tamaño del bloque puede ser aproximadamente  de la raíz cúbica del tamaño de la muestra,  (n): $l = n^{1/3}$.
+- Ver la ACF y tomar cuando el rezago se aproxime a cero (no significativo).
+
+## Ejercicio
+
+```{r}
+licores <- aus_retail |> 
+  filter(Industry == "Liquor retailing") |> 
+  summarise(Turnover = sum(Turnover))
+
+licores |> 
+  autoplot(Turnover)
+```
+

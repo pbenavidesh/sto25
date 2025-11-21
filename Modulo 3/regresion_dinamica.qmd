@@ -1,6 +1,8 @@
 ---
 title: "Regresión dinámica"
-format: html
+format: 
+  html:
+    theme: sketchy
 ---
 
 ```{r}
@@ -94,15 +96,29 @@ vic_elec_daily |>
 ```{r}
 vic_fit <- vic_elec_daily |> 
   model(
-    ARIMA(Demand ~ Temperature + I(Temperature^2) + (Day_Type=="Weekday") + season())
+    reg = ARIMA(Demand ~ Temperature + I(Temperature^2) + (Day_Type=="Weekday") + season())
   )
 
 vic_fit |> 
   report()
 
 vic_fit |> 
+  glance()
+
+vic_fit |> 
   gg_tsresiduals()
 ```
+
+```{r}
+vic_fit <- vic_elec_daily |> 
+  model(
+    TSLM(Demand ~ Temperature + I(Temperature^2) + (Day_Type=="Weekday"))
+  )
+
+vic_fit |> 
+  report()
+```
+
 
 ## Vic daily years
 
